@@ -12,8 +12,6 @@ const knexInstance = knex({
 })
 
 // Avoid dependency cycle
-// Attached knexInstance to app as a variable called 'db'
-// Now all incoming requests have knexInstance as a property
 app.set('db', knexInstance)
 
 // Begin listening on POST

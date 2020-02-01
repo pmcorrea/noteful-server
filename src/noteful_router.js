@@ -1,14 +1,13 @@
-// Import and instantiate Express Router
 const express = require('express')
 const notefulRouter = express.Router()
-// Enable Express to parse JSON
 const jsonParser = express.json()
-// Import notefulService object
 const notefulService = require('./noteful_service')
-// Import xss to sanitize incomming requests
+const { requireAuth } = require('./jwt-auth')
+const xss = require('xss')
+const authService = require('./auth_service')
 
 // Instantiate an sanitation function 
-// const serializeArticle = article => ({
+// const serializeResponse = article => ({
 //   id: article.id,
 //   style: article.style,
 //   title: xss(article.title),
@@ -16,87 +15,110 @@ const notefulService = require('./noteful_service')
 //   date_published: article.date_published,
 // })
 
-// '/' Route
 notefulRouter
 	.route('/notes')
+	.all(requireAuth)
 	.get((req, res, next) => {
-		// Retrieve all articles, this returns a Promise-like object
-		notefulService.getAllNotes(
-			// Pass in the knexInstance from the request to getAllArticles()
-			req.app.get('db')
+		let token = req.get("Authorization")
+		token = token.slice(7, token.length);
+		let payload = authService.verifyJwt(token)
+		let user = payload.user_name
+
+		notefulService.getNotes(
+			req.app.get('db'),
+			user
 		)
-		// Utilize Promise-like object, send as JSON
 		.then(notes => {
 			res.json(notes)
 		})
-		// Error handler 
 		.catch(next)
 	})
 	.post(jsonParser, (req, res, next) => {
-		const { id, note_id, note_name, modified, folder_id, content } = req.body.note
-		const newNote = { note_id, note_name, modified, folder_id, content }
-		notefulService.insertNote(req.app.get('db'), newNote)
-		.then(article => {
-			res
-				.status(201)
-				.json(article)
+		let token = req.get("Authorization")
+		token = token.slice(7, token.length);
+		let payload = authService.verifyJwt(token)
+		let userFromPayload = payload.user_name
+
+		return notefulService.getUserId(req.app.get('db'), userFromPayload)
+			.then(userId => {
+				
+				let user_id = userId[0]['id']
+				const { note_name, modified, folder_id, content } = req.body.note
+				const newNote = { user_id, note_name, modified, folder_id, content }
+			
+				notefulService.addNote(req.app.get("db"), newNote)
+					.then(result => {
+						return res.status(200).json(result)
+						})
+					.catch(next);
 			})
-		// Invoke next for Err handling
-		.catch(next)
-		
+			.catch(next)
 	})
 
 notefulRouter
 	.route('/notes/:noteId')
+	.all(requireAuth)
 	.delete((req, res, next) => {
 		const noteId = req.params.noteId
 		notefulService.deleteNote(req.app.get('db'), noteId)
 		.then(() => {
-			res.status(204).end()
+			res.status(200).json(noteId)
 		})
 		.catch(next)
 	})
 
 notefulRouter
 	.route('/folders/:folderId')
+	.all(requireAuth)
 	.delete((req, res, next) => {
 		const folderId = req.params.folderId
 		notefulService.deleteFolder(req.app.get('db'), folderId)
-		.then(item => {
-			// console.log(item)
-			res.status(200).json(item)
+		.then(folderId => {
+			return res.status(200).json(folderId)
 		})
 		.catch(next)
 	})
 
 notefulRouter
 	.route('/folders')
+	.all(requireAuth)
 	.get((req, res, next) => {
-		// Retrieve all articles, this returns a Promise-like object
-		notefulService.getAllFolders(
-			// Pass in the knexInstance from the request to getAllArticles()
-			req.app.get('db')
+		let token = req.get("Authorization")
+		token = token.slice(7, token.length);
+		let payload = authService.verifyJwt(token)
+		let user = payload.user_name
+		
+		notefulService.getFolders(
+			
+			req.app.get('db'),
+			user
 		)
-		// Utilize Promise-like object, send as JSON
-		.then(notes => {
-			res.json(notes)
+		.then(folders => {
+			res.json(folders)
 		})
-		// Error handler 
 		.catch(next)
 	})
 	.post(jsonParser, (req, res, next) => {
-		const { id, folder_id, folder_name } = req.body.folder
-		const newFolder = { folder_id, folder_name }
-		notefulService.insertFolder(req.app.get('db'), newFolder)
-		.then(article => {
-			res
-				.status(201)
-				.json(article)
-			})
-		// Invoke next for Err handling
-		.catch(next)
+		let token = req.get("Authorization")
+		token = token.slice(7, token.length);
+		let payload = authService.verifyJwt(token)
+		let userFromPayload = payload.user_name
+
+		const { folder_name } = req.body.folder
 		
+		return notefulService.getUserId(req.app.get('db'), userFromPayload)
+			.then(userId => {
+				const newFolder = { 
+					user_id: userId[0]['id'], 
+					folder_name: folder_name 
+				}
+				return notefulService.addFolder(req.app.get('db'), newFolder)
+					.then(result => {
+						return res.status(200).json(result)
+						})
+					.catch(next)
+						})
+		.catch(next)	
 	})
 	
-
 module.exports = notefulRouter

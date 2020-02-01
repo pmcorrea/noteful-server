@@ -1,53 +1,69 @@
-// ArticlesService object holds methods to execute on database
-// We pass in the knex instance 
 const notefulService = {
-
-  getAllFolders(knex){
-    // knex methods returns Promise-like objects
-    return knex.select('*').from('noteful_folders')
-  },
-  getAllNotes(knex){
-    // knex methods returns Promise-like objects
-    return knex.select('*').from('noteful_notes')
-  },
-  insertFolder(knex, folder){
-    // knex methods returns Promise-like objects
+	getUserId(knex, user_name) {
+		return knex
+		  .select("id")
+		  .from("users")
+		  .where("user_name", user_name);
+    },
+    insertUser(knex, hashedUser) {
+      return knex
+        .insert(hashedUser)
+        .into("users")
+      },
+  getNotes(knex, user_id) {
     return knex
+      .select("*")
+      .from("notes")
+      .where("user_id", user_id);
+  },
+  getFolders(knex, user_id) {
+    return knex
+      .select("*")
+      .from("folders")
+      .where("user_id", user_id);
+  },
+  addNote(knex, note) {
+    return knex
+    .returning("*")
+    .insert(note)
+    .into("notes");
+  },
+  addFolder(knex, folder) {
+    return knex
+      .returning("*")
       .insert(folder)
-      .into('noteful_folders')
-      .returning('*')
-      .then(rows => {
-        return rows[0]
-      })
+      .into("folders");
   },
-  insertNote(knex, note){
-    // knex methods returns Promise-like objects
-    return knex
-      .insert(note)
-      .into('noteful_notes')
-      .returning('*')
-      .then(rows => {
-        return rows[0]
-      })
+  deleteNote(knex, noteId) {
+    return knex("notes")
+      .where("id", noteId)
+      .del();
   },
-  deleteNote(knex, noteId){
-    // knex methods returns Promise-like objects
-    return knex('noteful_notes')
-      .where('note_id', noteId)
+  deleteFolder(knex, folderId) {
+    return knex("folders")
+      .where("id", folderId)
+      .del();
+  },
+  updatePassword(knex, userId, newPassword) {
+    return knex("users")
+      .where("id", userId)
+      .update("user_password", newPassword);
+  }, 
+  updateVisibility(knex, userId, newVisibility) {
+    return knex("users")
+      .where("id", userId)
+      .update("visibility", newVisibility);
+  },
+  getVisibilityAndUserName(knex, userId) {
+    return knex("users")
+      .select("visibility", "user_name")
+      .where("id", userId);
+  }, 
+  deleteAccount(knex, userId) {
+    return knex("users")
+      .where("id", userId)
       .del()
-  },
-  deleteFolder(knex, folderId){
-    // knex methods returns Promise-like objects
-    return knex('noteful_folders')
-      .where('folder_id', folderId)
-      .del()
-      .then((numDeleted) => {
-        return knex
-        .select('*')
-        .from('noteful_folders')
-      })
-      
-  },
-}
+  }
+};
 
-module.exports = notefulService
+module.exports = notefulService;
