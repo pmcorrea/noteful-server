@@ -2,3 +2,4 @@ DROP TABLE IF EXISTS notes;
 DROP TABLE IF EXISTS folders;
 DROP TABLE IF EXISTS users;
 DROP TYPE user_status;
+DROP TYPE visibility;

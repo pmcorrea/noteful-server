@@ -8,7 +8,7 @@ function getUser(db, user_name) {
 		.first()
 }
 
-function insertUser(db, user_credentials) {
+function addUser(db, user_credentials) {
 	return db
 		.insert(user_credentials)
 		.into("users")
@@ -43,6 +43,6 @@ module.exports = {
 	comparePasswords,
 	createJwt,
 	verifyJwt,
-	insertUser,
+	addUser,
 	encryptPw
 }

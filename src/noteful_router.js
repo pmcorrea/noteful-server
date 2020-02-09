@@ -39,7 +39,7 @@ notefulRouter
 		let payload = authService.verifyJwt(token)
 		let userFromPayload = payload.user_name
 
-		return notefulService.getUserId(req.app.get('db'), userFromPayload)
+		return notefulService.getUserIdByUsername(req.app.get('db'), userFromPayload)
 			.then(userId => {
 				
 				let user_id = userId[0]['id']
@@ -106,7 +106,7 @@ notefulRouter
 
 		const { folder_name } = req.body.folder
 		
-		return notefulService.getUserId(req.app.get('db'), userFromPayload)
+		return notefulService.getUserIdByUsername(req.app.get('db'), userFromPayload)
 			.then(userId => {
 				const newFolder = { 
 					user_id: userId[0]['id'], 
