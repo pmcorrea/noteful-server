@@ -1,18 +1,18 @@
 const bcrypt = require('bcryptjs')
 const jwt = require('jsonwebtoken')
 
-function makeTestNotes() {
+function makeTestPosts() {
 	return [
 		{
-			note_id: "test_id_1",
-			note_name: "test_note_1",
+			post_id: "test_id_1",
+			post_name: "test_post_1",
 			modified: "2019-01-03T00:00:00.000Z",
 			folder_id: "test_folder_id_1",
 			content: "This is some test content.",
 		},
 		{
-			note_id: "test_id_2",
-			note_name: "test_note_2",
+			post_id: "test_id_2",
+			post_name: "test_post_2",
 			modified: "2019-01-03T00:00:00.000Z",
 			folder_id: "test_folder_id_2",
 			content: "This is some test content.",
@@ -62,18 +62,18 @@ function cleanDB(db) {
 	return db.transaction(trx => 
 		trx.raw(
 			`TRUNCATE
-			noteful_folders,
-			noteful_notes,
+			folders,
+			posts,
 			users
 			`
 		)
 		.then(() =>
 			Promise.all([
-			trx.raw(`ALTER SEQUENCE noteful_folders_id_seq minvalue 0 START WITH 1`),
-			trx.raw(`ALTER SEQUENCE noteful_notes_id_seq minvalue 0 START WITH 1`),
+			trx.raw(`ALTER SEQUENCE folders_id_seq minvalue 0 START WITH 1`),
+			trx.raw(`ALTER SEQUENCE posts_id_seq minvalue 0 START WITH 1`),
 			trx.raw(`ALTER SEQUENCE users_id_seq minvalue 0 START WITH 1`),
-			trx.raw(`SELECT setval('noteful_folders_id_seq', 0)`),
-			trx.raw(`SELECT setval('noteful_notes_id_seq', 0)`),
+			trx.raw(`SELECT setval('folders_id_seq', 0)`),
+			trx.raw(`SELECT setval('posts_id_seq', 0)`),
 			trx.raw(`SELECT setval('users_id_seq', 0)`),
 			])
 		)
@@ -91,13 +91,6 @@ function seedUsers(db, users) {
 
 
 	return db.into('users').insert(preppedUsers)
-	//   .then(() =>
-	// 	// update the auto sequence to stay in sync
-	// 	db.raw(
-	// 	  `SELECT setval('blogful_users_id_seq', ?)`,
-	// 	  [users[users.length - 1].id],
-	// 	)
-	//   )
 }
 
 function makeAuthHeader(user, secret = process.env.JWT_SECRET) {
@@ -110,7 +103,7 @@ function makeAuthHeader(user, secret = process.env.JWT_SECRET) {
 
 module.exports = {
 	makeTestFolder, 
-	makeTestNotes,
+	makeTestPosts,
 	makeTestUsers,
 	cleanDB,
 	seedUsers,

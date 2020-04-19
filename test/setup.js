@@ -12,7 +12,7 @@ const { expect } = require('chai')
 const supertest = require('supertest')
 
 process.env.TEST_DB_URL = process.env.TEST_DB_URL
-  || "postgresql://postgres@localhost/noteful_test"
+  || "postgresql://postgres@localhost/centr_test"
 
 global.expect = expect
 global.supertest = supertest

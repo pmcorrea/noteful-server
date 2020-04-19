@@ -9,7 +9,7 @@ const cors = require('cors')
 const helmet = require('helmet')
 
 // Import routers
-const notefulRouter = require('./noteful_router')
+const centrRouter = require('./centr_router')
 const authRouter = require('./auth_router')
 
 // Instantiate Express App
@@ -22,7 +22,7 @@ const morganOption = (NODE_ENV === 'production')
 app.use(morgan(morganOption))
 app.use(helmet())
 app.use(cors())
-app.use('/', notefulRouter)
+app.use('/', centrRouter)
 app.use('/api/auth', authRouter)
 // Our production applications should hide error messages 
 // from users and other malicious parties

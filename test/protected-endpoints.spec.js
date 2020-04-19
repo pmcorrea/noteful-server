@@ -27,18 +27,18 @@ describe('Protected endpoints', function() {
 
   const protectedEndpoints = [
     {
-		name: 'GET /notes',
-		path: '/notes',
+		name: 'GET /posts',
+		path: '/posts',
 		method: supertest(app).get,
 	},
 	{
-		name: 'POST /notes',
-		path: '/notes',
+		name: 'POST /posts',
+		path: '/posts',
 		method: supertest(app).post,
 	},
     {
-		name: 'DELETE /notes/:noteId',
-		path: '/notes/:noteId',
+		name: 'DELETE /posts/:postId',
+		path: '/posts/:postId',
 		method: supertest(app).delete,
     },
     {
