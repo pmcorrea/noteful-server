@@ -6,15 +6,6 @@ const { requireAuth } = require('./jwt-auth')
 const xss = require('xss')
 const authService = require('./auth_service')
 
-// Instantiate an sanitation function 
-// const serializeResponse = article => ({
-//   id: article.id,
-//   style: article.style,
-//   title: xss(article.title),
-//   content: xss(article.content),
-//   date_published: article.date_published,
-// })
-
 centrRouter
 	.route('/editpost')
 	.all(requireAuth)
@@ -47,12 +38,12 @@ centrRouter
 
 		let { post } = req.body
 		
-		let { post_name, content, folder_id, visibility, modified, postIdToEdit} = post
+		let { post_name, content, folder_id, visibility, modified, postIdToEdit } = post
 		
 		centrService.updatePostById(
 			req.app.get('db'),
 			post_name,
-			content,
+			xss(content),
 			folder_id,
 			visibility,
 			modified,
@@ -81,7 +72,7 @@ centrRouter
 				
 				let { user_name, folder_id, post_name, modified, content, visibility, avatar } = req.body.post
 				user_name = user_name['user_name']
-				let newPost = { user_id, user_name, folder_id, post_name, modified, content, visibility, avatar }
+				let newPost = { user_id, user_name, folder_id, post_name, modified, content: xss(content), visibility, avatar }
 			
 				centrService.addPost(req.app.get("db"), newPost)
 					.then(result => {

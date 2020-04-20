@@ -5,15 +5,6 @@ const authService = require('./auth_service')
 const centrService = require('./centr_service')
 const { requireAuth } = require('./jwt-auth.js')
 
-// Instantiate an sanitation function 
-// const serializeResponse = article => ({
-//   id: article.id,
-//   style: article.style,
-//   title: xss(article.title),
-//   content: xss(article.content),
-//   date_published: article.date_published,
-// })
-
 authRouter
 	.route('/login')
 	.post(jsonParser, (req, res, next) => {
