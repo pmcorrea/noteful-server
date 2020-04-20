@@ -42,8 +42,5 @@ app.get('/', (req, res) => {
     res.send('Hello, world!')
 })
 
-// Confirm DB_URL env variable
-// console.log(process.env.DATABASE_URL)
-
 // Export app
 module.exports = app

@@ -20,7 +20,6 @@ authRouter
 		const { user_name, password, token } = req.body
 		const loginUser = { user_name, password }
 
-		// if token exists, get username from jwt payload and retireve  and folders
 		if (token) {
 			const payload = authService.verifyJwt(token)
 			const currentUser = payload.user_name
@@ -47,7 +46,7 @@ authRouter
 			}
 
 			getPostsAndFolders()
-		// if no token exists check for username and password combo
+
 		} else {
 			for (const [key, value] of Object.entries(loginUser)) {
 				if (value == null) {					
@@ -352,7 +351,6 @@ authRouter
 authRouter
 	.route('/getconnectionswithdetails')
 	.all(requireAuth)
-	// check
 	.get((req, res, next) => {
 		let token = req.get("Authorization")
 		token = token.slice(7, token.length);
@@ -399,7 +397,6 @@ authRouter
 					username
 				)
 
-				// here
 				currentUserId = currentUserId[0]['id']
 				let connections = await centrService.getAllConnections(
 					req.app.get('db'),
@@ -407,7 +404,6 @@ authRouter
 				)
 
 				let connectionIds = connections.map(x => x.connection_id)
-				// console.log(connectionIds)
 
 				let users = await Promise.all( connectionIds.map( x => { 
 					return centrService.getUserById(
@@ -417,7 +413,6 @@ authRouter
 				))
 
 				users = users.flat()
-				// console.log(users)
 
 				return res.status(200).json(users)
 			} catch(error) {
@@ -428,7 +423,6 @@ authRouter
 		getConnections()
 	})
 	.delete(jsonParser, (req, res, next) => {
-		// Get Current Username
 		let token = req.get("Authorization")
 		token = token.slice(7, token.length);
 		let payload = authService.verifyJwt(token)
@@ -437,11 +431,9 @@ authRouter
 
 		let asyncFunction = async () => {
 			try {
-				// get current userId
 				let currentUserId = await centrService.getUserIdByUsername(req.app.get('db'), currentUsername)
 				currentUserId = currentUserId[0]['id']
 
-				// get current connections
 				let connectionToDelete = await centrService.getConnection(req.app.get('db'), currentUserId, userId)
 				
 				if (connectionToDelete.length !== 0) {
@@ -470,7 +462,6 @@ authRouter
 	.route('/followers')
 	.all(requireAuth)
 	.get((req, res, next) => {
-			// Get Current Username
 			let token = req.get("Authorization")
 			token = token.slice(7, token.length);
 			let payload = authService.verifyJwt(token)
@@ -491,7 +482,6 @@ authRouter
 
 	})
 	.delete(jsonParser, (req, res, next) => {
-		// Get Current Username
 		let token = req.get("Authorization")
 		token = token.slice(7, token.length);
 		let payload = authService.verifyJwt(token)
@@ -618,7 +608,7 @@ authRouter
 
 		asyncFunction()
 	})
-	// Approve request to follow
+
 	.post(jsonParser, (req, res, next) => {
 		let token = req.get("Authorization")
 		token = token.slice(7, token.length);
@@ -628,7 +618,7 @@ authRouter
 		let {userId}  = req.body
 
 		let asyncFunction = async () => {
-			// if current request exists
+
 			try {
 				let currentUserId = await centrService.getUserIdByUsername(
 					req.app.get('db'),
@@ -663,13 +653,11 @@ authRouter
 		asyncFunction()
 	})
 	.delete(jsonParser, (req, res, next) => {
-		// Get Current Username
 		let token = req.get("Authorization")
 		token = token.slice(7, token.length);
 		let payload = authService.verifyJwt(token)
 		let currentUser = payload.user_name
 
-		// user to delete request that matches currentUser from
 		let { userId } = req.body
 
 		let asyncFunction = async () => {
@@ -738,9 +726,9 @@ authRouter
 
 		asyncFunction()
 	})
-	// Send new request
+
 	.post(jsonParser, (req, res, next) => {
-		// add errorhandleing 
+
 		let token = req.get("Authorization")
 		token = token.slice(7, token.length);
 		let payload = authService.verifyJwt(token)
@@ -750,7 +738,7 @@ authRouter
 		let {userId}  = req.body
 
 		let asyncFunction = async () => {
-			// if current request exists
+
 			try {
 					let currentUserId = await centrService.getUserIdByUsername(
 						req.app.get('db'),
@@ -792,13 +780,12 @@ authRouter
 		asyncFunction()
 	})
 	.delete(jsonParser, (req, res, next) => {
-		// Get Current Username
+
 		let token = req.get("Authorization")
 		token = token.slice(7, token.length);
 		let payload = authService.verifyJwt(token)
 		let currentUser = payload.user_name
 
-		// user to delete request that matches currentUser from
 		let { userId } = req.body
 
 		let asyncFunction = async () => {
@@ -841,7 +828,6 @@ authRouter
 	.all(requireAuth)
 	.post(jsonParser, (req, res, next) => {
 		const {url} = req.body
-		console.log(url)
 
 		let token = req.get("Authorization")
 		token = token.slice(7, token.length);
@@ -856,7 +842,6 @@ authRouter
 				)
 
 				userID = userID[0]['id']
-				console.log('userID', userID)
 
 				await centrService.updateAvatar(
 					req.app.get('db'),

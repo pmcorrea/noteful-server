@@ -1,5 +1,5 @@
 const centrService = {
-	// User methods
+
 	getUserIdByUsername(knex, username) {
 		return knex
 		.select("id")
@@ -47,7 +47,6 @@ const centrService = {
 		.where("user_status", "admin")
 	}, 
 
-	// Posts and folder methods 
 	getPosts(knex, user_id) {
 		return knex
 		.select("*")
@@ -110,13 +109,13 @@ const centrService = {
 		.where("id", folderId)
 		.del()
 	},
-	// Password methods
+
 	updatePassword(knex, userId, newPassword) {
 		return knex("users")
 		.where("id", userId)
 		.update("user_password", newPassword)
 	}, 
-	// Visibility methods
+
 	updateVisibility(knex, userId, newVisibility) {
 		return knex("users")
 		.where("id", userId)
@@ -133,7 +132,6 @@ const centrService = {
 		.update("avatar", url)
 	},
 
-	// Request methods
 	insertRequestToFollow(knex, myId, theirId, user_name) {
 		newRequest = {
 			user_id: myId,
@@ -197,7 +195,6 @@ const centrService = {
 		})
 	},
 
-	// Connection methods
 	getConnection(knex, myId, theirId) {
 		return knex("connections")
 		.select("*")
@@ -238,7 +235,7 @@ const centrService = {
 		})
 	},
 	
-	// Follower methods
+
 	getFollowers(knex, myId){
 		return knex("connections")
 		.select("*")
