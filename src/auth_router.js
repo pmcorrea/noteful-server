@@ -819,6 +819,7 @@ authRouter
 	.all(requireAuth)
 	.post(jsonParser, (req, res, next) => {
 		const {url} = req.body
+		console.log(url)
 
 		let token = req.get("Authorization")
 		token = token.slice(7, token.length);
