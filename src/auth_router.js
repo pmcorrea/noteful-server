@@ -1,869 +1,885 @@
-const express = require('express')
-const authRouter = express.Router()
-const jsonParser = express.json()
-const authService = require('./auth_service')
-const centrService = require('./centr_service')
-const { requireAuth } = require('./jwt-auth.js')
+const express = require("express");
+const authRouter = express.Router();
+const jsonParser = express.json();
+const authService = require("./auth_service");
+const centrService = require("./centr_service");
+const { requireAuth } = require("./jwt-auth.js");
+
+authRouter.route("/login").post(jsonParser, (req, res, next) => {
+  const { user_name, password, token } = req.body;
+  const loginUser = { user_name, password };
+
+  if (token) {
+    const payload = authService.verifyJwt(token);
+    const currentUser = payload.user_name;
+
+    let getPostsAndFolders = async () => {
+      try {
+        let userId = await centrService.getUserIdByUsername(
+          req.app.get("db"),
+          currentUser
+        );
+        userId = userId[0]["id"];
+
+        let posts = await centrService.getPosts(req.app.get("db"), userId);
+
+        let folders = await centrService.getFolders(req.app.get("db"), userId);
+
+        let postsAndFolders = {
+          posts: posts,
+          folders: folders,
+        };
+
+        return res.status(200).json(postsAndFolders);
+      } catch (error) {
+        console.error(error);
+      }
+    };
+
+    getPostsAndFolders();
+  } else {
+    for (const [key, value] of Object.entries(loginUser)) {
+      if (value == null) {
+        return res.status(400).json({
+          error: `Missing ${key} in request body`,
+        });
+      }
+    }
+
+    let getPostsFoldersAndToken = async () => {
+      try {
+        let dbUser = await authService.getUser(
+          req.app.get("db"),
+          loginUser.user_name
+        );
+
+        if (!dbUser)
+          return res.status(400).json({
+            error: `User does not exist, please register.`,
+          });
+
+        if (dbUser.user_status == "blocked")
+          return res.status(400).json({
+            error: `User is blocked.`,
+          });
+
+        let compareMatch = await authService.comparePasswords(
+          loginUser.password,
+          dbUser.user_password
+        );
+        if (!compareMatch)
+          return res.status(400).json({
+            error: "Incorrect user_name or password!",
+          });
+
+        const sub = dbUser.user_name;
+        const payload = { user_name: dbUser.user_name };
+
+        let authToken = authService.createJwt(sub, payload);
+
+        let dbUserId = await centrService.getUserIdByUsername(
+          req.app.get("db"),
+          dbUser.user_name
+        );
+        userId = dbUserId[0]["id"];
+
+        let posts = await centrService.getPosts(req.app.get("db"), userId);
+
+        let folders = await centrService.getFolders(req.app.get("db"), userId);
+
+        let postsFoldersAndAuth = {
+          posts: posts,
+          folders: folders,
+          authToken: authToken,
+        };
+
+        return res.status(200).json(postsFoldersAndAuth);
+      } catch (error) {
+        console.error(error);
+      }
+    };
+
+    getPostsFoldersAndToken();
+  }
+});
+
+authRouter.route("/register").post(jsonParser, (req, res, next) => {
+  const { user_name, password, visibility, profilePicURL } = req.body;
+  const newUser = { user_name, password, visibility, profilePicURL };
+
+  let registerUser = async () => {
+    try {
+      let dbUser = await authService.getUser(
+        req.app.get("db"),
+        newUser.user_name
+      );
+
+      if (dbUser)
+        return res.status(400).json({
+          error: `Username already exists`,
+        });
+
+      let encryptedPw = await authService.encryptPw(newUser.password);
+
+      let hashedUser = {
+        user_name: newUser.user_name,
+        user_password: encryptedPw,
+        user_status: "user",
+        visibility: visibility,
+        avatar: profilePicURL,
+      };
+
+      await authService.addUser(req.app.get("db"), hashedUser);
+
+      return res.status(200).json("User created");
+    } catch (error) {
+      console.error(error);
+    }
+  };
+
+  registerUser();
+});
 
 authRouter
-	.route('/login')
-	.post(jsonParser, (req, res, next) => {
-		const { user_name, password, token } = req.body
-		const loginUser = { user_name, password }
+  .route("/changepassword")
+  .all(requireAuth)
+  .post(jsonParser, (req, res, next) => {
+    const { oldPassword, newPassword, confirmNewPassword, token } = req.body;
 
-		if (token) {
-			const payload = authService.verifyJwt(token)
-			const currentUser = payload.user_name
-			
-			let getPostsAndFolders = async () => {
-				try {
-					let userId = await centrService.getUserIdByUsername(req.app.get('db'), currentUser)
-					userId = userId[0]['id']
+    if (confirmNewPassword !== newPassword) {
+      return res.status(400).json("New passwords do not match");
+    }
 
-					let posts = await centrService.getPosts(req.app.get('db'), userId)
+    let payload = authService.verifyJwt(token);
+    let username = payload.user_name;
 
-					let folders = await centrService.getFolders(req.app.get('db'), userId)
+    let updatePassword = async () => {
+      try {
+        let user = await authService.getUser(req.app.get("db"), username);
+        let comparePasswords = await authService.comparePasswords(
+          oldPassword,
+          user.user_password
+        );
 
-					let postsAndFolders = {
-						posts: posts, 
-						folders: folders,
-					}
+        if (comparePasswords) {
+          let userId = await centrService.getUserIdByUsername(
+            req.app.get("db"),
+            username
+          );
+          userId = userId[0]["id"];
 
-					return res.status(200).json(postsAndFolders)
+          let encryptedPw = await authService.encryptPw(newPassword);
 
-				} catch(error) {
-					console.error(error)
-				}
-			}
+          await centrService.updatePassword(
+            req.app.get("db"),
+            userId,
+            encryptedPw
+          );
 
-			getPostsAndFolders()
+          return res.status(200).json("Password is updated");
+        } else {
+          return res.status(400).json("Current password is incorrect");
+        }
+      } catch (error) {
+        console.error(error);
+      }
+    };
 
-		} else {
-			for (const [key, value] of Object.entries(loginUser)) {
-				if (value == null) {					
-					return res.status(400).json({
-						error: `Missing ${key} in request body`
-					})
-				}
-			}	
-		
-			let getPostsFoldersAndToken = async () => {
-				try {
-					let dbUser = await authService.getUser(req.app.get('db'), loginUser.user_name)
-
-					if (!dbUser)
-						return res.status(400).json({
-							error: `User does not exist, please register.`
-						})
-					
-					if (dbUser.user_status == 'blocked')
-						return res.status(400).json({
-							error: `User is blocked.`
-						})
-
-					let compareMatch = await authService.comparePasswords(loginUser.password, dbUser.user_password)
-					if (!compareMatch)
-						return res.status(400).json({
-							error: 'Incorrect user_name or password!',
-						})
-
-					const sub = dbUser.user_name
-					const payload = { user_name: dbUser.user_name }
-
-					let authToken = authService.createJwt(sub, payload)
-
-					let dbUserId = await centrService.getUserIdByUsername(req.app.get('db'), dbUser.user_name)
-					userId = dbUserId[0]['id']
-
-					let posts = await centrService.getPosts(req.app.get('db'), userId)
-
-					let folders = await centrService.getFolders(req.app.get('db'), userId)
-
-					let postsFoldersAndAuth = {
-						posts: posts, 
-						folders: folders,
-						authToken: authToken
-					}
-
-					return res.status(200).json(postsFoldersAndAuth)
-
-				} catch(error) {
-					console.error(error)
-				}
-			}
-
-			getPostsFoldersAndToken()
-		}
-	})
+    updatePassword();
+  });
 
 authRouter
-	.route('/register')
-	.post(jsonParser, (req, res, next) => {
-		const { user_name, password, visibility, profilePicURL } = req.body
-		const newUser = { user_name, password, visibility, profilePicURL }
+  .route("/changevisibility")
+  .all(requireAuth)
+  .post(jsonParser, (req, res, next) => {
+    const { token, visibility } = req.body;
 
-		let registerUser = async () => {
-			try {
-				let dbUser = await authService.getUser(req.app.get('db'), newUser.user_name)
+    let payload = authService.verifyJwt(token);
+    let username = payload.user_name;
 
-				if (dbUser)
-					return res.status(400).json({
-						error: `Username already exists`
-					})
-					
-				let encryptedPw = await authService.encryptPw(newUser.password)
+    let changeVisibility = async () => {
+      try {
+        let userId = await centrService.getUserIdByUsername(
+          req.app.get("db"),
+          username
+        );
+        userId = userId[0]["id"];
 
-				let hashedUser = {
-					user_name: newUser.user_name,
-					user_password: encryptedPw,
-					user_status: 'user',
-					visibility: visibility,
-					avatar: profilePicURL
-				}
+        await centrService.updateVisibility(
+          req.app.get("db"),
+          userId,
+          visibility
+        );
 
-				await authService.addUser(req.app.get('db'),hashedUser)
+        return res.status(200).json("Visibility is updated");
+      } catch (error) {
+        console.error(error);
+      }
+    };
 
-				return res.status(200).json('User created')
-			
-			} catch(error) {
-				console.error(error)
-			}
-		}
-
-		registerUser()
-	})
+    changeVisibility();
+  });
 
 authRouter
-	.route('/changepassword')
-	.all(requireAuth)
-	.post(jsonParser, (req, res, next) => {
-		const {oldPassword, newPassword, confirmNewPassword, token} = req.body
+  .route("/deleteAccount")
+  .all(requireAuth)
+  .delete(jsonParser, (req, res, next) => {
+    let token = req.get("Authorization");
+    token = token.slice(7, token.length);
 
-		if (confirmNewPassword !== newPassword ){
-			return res.status(400).json('New passwords do not match')
-		}
-		
-		let payload = authService.verifyJwt(token)
-		let username = payload.user_name
+    let payload = authService.verifyJwt(token);
+    let username = payload.user_name;
 
-		let updatePassword = async () => {
-			try {
-				let user = await authService.getUser(req.app.get('db'), username)
-				let comparePasswords = await authService.comparePasswords(oldPassword, user.user_password)
+    const { confirmUsername, currentUsername } = req.body;
 
-				if (comparePasswords) {
-					let userId = await centrService.getUserIdByUsername(req.app.get('db'), username)
-					userId = userId[0]['id']
+    if (confirmUsername !== currentUsername) {
+      return res.status(400).json("User name to delete does not match");
+    }
 
-					let encryptedPw = await authService.encryptPw(newPassword)
+    let deleteAccount = async () => {
+      try {
+        let userId = await centrService.getUserIdByUsername(
+          req.app.get("db"),
+          username
+        );
+        userId = userId[0]["id"];
 
-					await centrService.updatePassword(req.app.get('db'), userId, encryptedPw )
+        await centrService.deleteUserById(req.app.get("db"), userId);
+        return res.status(200).json("user deleted");
+      } catch (error) {
+        console.error(error);
+      }
+    };
 
-					return res.status(200).json('Password is updated')
-				} else {
-					return res.status(400).json('Current password is incorrect')
-				}
-			} catch(error) {
-				console.error(error)
-			}
-		}
+    deleteAccount();
+  });
 
-		updatePassword()
-	})
+authRouter.route("/checkUsername").post(jsonParser, (req, res, next) => {
+  let { user_name } = req.body;
 
-authRouter
-	.route('/changevisibility')
-	.all(requireAuth)
-	.post(jsonParser, (req, res, next) => {
-		const {token, visibility} = req.body
-		
-		let payload = authService.verifyJwt(token)
-		let username = payload.user_name
+  let doesUserExists = async () => {
+    let user = await centrService.getUserByUsername(
+      req.app.get("db"),
+      user_name
+    );
 
-		let changeVisibility = async () => {
-			try {
+    user = user[0];
+    if (user) {
+      return res.status(200).json(true);
+    }
 
-				let userId = await centrService.getUserIdByUsername(req.app.get('db'), username)
-				userId = userId[0]['id']
+    return res.status(200).json(false);
+  };
 
-				await centrService.updateVisibility(req.app.get('db'), userId, visibility )
-				
-				return res.status(200).json('Visibility is updated')
-
-			} catch(error) {
-				console.error(error)
-			}
-		}
-
-		changeVisibility()
-	})
+  doesUserExists();
+});
 
 authRouter
-	.route('/deleteAccount')
-	.all(requireAuth)
-	.delete(jsonParser, (req, res, next) => {
-		let token = req.get("Authorization")
-		token = token.slice(7, token.length);
-		
-		let payload = authService.verifyJwt(token)
-		let username = payload.user_name
-		
-		const {confirmUsername, currentUsername} = req.body
-		
+  .route("/getCurrentUserDetailsById")
+  .all(requireAuth)
+  .get((req, res, next) => {
+    let token = req.get("Authorization");
+    token = token.slice(7, token.length);
 
-		if (confirmUsername !== currentUsername) {
-			return res.status(400).json('User name to delete does not match')
-		}
+    let payload = authService.verifyJwt(token);
+    let username = payload.user_name;
 
-		let deleteAccount = async () => {
-			try {
-				let userId = await centrService.getUserIdByUsername(req.app.get('db'), username)
-				userId = userId[0]['id']
+    let userDetails = async () => {
+      try {
+        let userId = await centrService.getUserIdByUsername(
+          req.app.get("db"),
+          username
+        );
+        userId = userId[0]["id"];
 
-				await centrService.deleteUserById(req.app.get('db'), userId )
-				return res.status(200).json('user deleted')
-			} catch(error) {
-				console.error(error)
-			}
-		}
+        let user = await centrService.getUserById(req.app.get("db"), userId);
+        return res.status(200).json(user);
+      } catch (error) {
+        console.error(error);
+      }
+    };
 
-		deleteAccount()
-	})
+    userDetails();
+  });
 
 authRouter
-	.route('/checkUsername')
-	.post(jsonParser, (req, res, next) => {
+  .route("/getUserDetailsById")
+  .all(requireAuth)
+  .post(jsonParser, (req, res, next) => {
+    let token = req.get("Authorization");
+    token = token.slice(7, token.length);
 
-		let {user_name} = req.body
+    let payload = authService.verifyJwt(token);
+    let username = payload.user_name;
 
-		let doesUserExists = async () => {
-			let user = await centrService.getUserByUsername(
-				req.app.get('db'),
-				user_name
-			)
+    let { userId } = req.body;
 
-			user = user[0]
-			if (user) {
-				return res.status(200).json(true)
-			}
+    let userDetails = async () => {
+      try {
+        let user = await centrService.getUserById(req.app.get("db"), userId);
+        user = user[0];
+        return res.status(200).json(user);
+      } catch (error) {
+        console.error(error);
+      }
+    };
 
-			return res.status(200).json(false)
-		}
-
-		doesUserExists()
-	})
-
-authRouter
-	.route('/getCurrentUserDetailsById')
-	.all(requireAuth)
-	.get((req, res, next) => {
-		let token = req.get("Authorization")
-		token = token.slice(7, token.length);
-		
-		let payload = authService.verifyJwt(token)
-		let username = payload.user_name
-
-		let userDetails = async () => {
-			try {
-				let userId = await centrService.getUserIdByUsername(req.app.get('db'), username)
-				userId = userId[0]['id']
-
-				let user = await centrService.getUserById(req.app.get('db'), userId )
-				return res.status(200).json(user)
-			} catch(error) {
-				console.error(error)
-			}
-		}
-
-		userDetails()
-	})
+    userDetails();
+  });
 
 authRouter
-	.route('/getUserDetailsById')
-	.all(requireAuth)
-	.post(jsonParser, (req, res, next) => {
-		let token = req.get("Authorization")
-		token = token.slice(7, token.length);
-		
-		let payload = authService.verifyJwt(token)
-		let username = payload.user_name
+  .route("/getUserDetailsByToken")
+  .all(requireAuth)
+  .get(jsonParser, (req, res, next) => {
+    let token = req.get("Authorization");
+    token = token.slice(7, token.length);
 
-		let {userId} = req.body
+    let payload = authService.verifyJwt(token);
+    let username = payload.user_name;
 
-		let userDetails = async () => {
-			try {
-				let user = await centrService.getUserById(req.app.get('db'), userId )
-				user = user[0]
-				return res.status(200).json(user)
-			} catch(error) {
-				console.error(error)
-			}
-		}
+    let userDetails = async () => {
+      try {
+        let user = await centrService.getUserByUsername(
+          req.app.get("db"),
+          username
+        );
+        user = user[0];
+        return res.status(200).json(user);
+      } catch (error) {
+        console.error(error);
+      }
+    };
 
-		userDetails()
-	})
-
-authRouter
-	.route('/getUserDetailsByToken')
-	.all(requireAuth)
-	.get(jsonParser, (req, res, next) => {
-		let token = req.get("Authorization")
-		token = token.slice(7, token.length);
-		
-		let payload = authService.verifyJwt(token)
-		let username = payload.user_name
-
-
-		let userDetails = async () => {
-			try {
-				let user = await centrService.getUserByUsername(req.app.get('db'), username )
-				user = user[0]
-				return res.status(200).json(user)
-			} catch(error) {
-				console.error(error)
-			}
-		}
-
-		userDetails()
-	})
-
+    userDetails();
+  });
 
 authRouter
-	.route('/getallusers')
-	.all(requireAuth)
-	.get((req, res, next) => {
-		centrService.getAllUsers(req.app.get('db'))
-		.then(result => {
-			return res.status(200).json(result)
-		})
-		.catch(next)
-	})
+  .route("/getallusers")
+  .all(requireAuth)
+  .get((req, res, next) => {
+    centrService
+      .getAllUsers(req.app.get("db"))
+      .then((result) => {
+        return res.status(200).json(result);
+      })
+      .catch(next);
+  });
 
 authRouter
-	.route('/getconnectionswithdetails')
-	.all(requireAuth)
-	.get((req, res, next) => {
-		let token = req.get("Authorization")
-		token = token.slice(7, token.length);
-		
-		let payload = authService.verifyJwt(token)
-		let username = payload.user_name
+  .route("/getconnectionswithdetails")
+  .all(requireAuth)
+  .get((req, res, next) => {
+    let token = req.get("Authorization");
+    token = token.slice(7, token.length);
 
-		centrService.getUserIdByUsername(req.app.get('db'), username)
-		.then(user => {
-			return user[0]['id'] 
-		})
-		.then(userId => {
-			return centrService.getAllConnections_UserIds(req.app.get('db'), userId)
-		})
-		.then(connections => {
-			return Promise.all(connections.map(user => {
-				return centrService.getUserById(req.app.get('db'), user)
-			}))
-		})
-		.then(result => {
-			return res.status(200).json(result)
-		})
-		.catch(next)			
-	})
+    let payload = authService.verifyJwt(token);
+    let username = payload.user_name;
 
-
-
-
-
-authRouter
-	.route('/connections')
-	.all(requireAuth)
-	.get((req, res, next) => {
-		let token = req.get("Authorization")
-		token = token.slice(7, token.length);
-		
-		let payload = authService.verifyJwt(token)
-		let username = payload.user_name
-
-		let getConnections = async () => {
-			try {
-				let currentUserId = await centrService.getUserIdByUsername(
-					req.app.get('db'),
-					username
-				)
-
-				currentUserId = currentUserId[0]['id']
-				let connections = await centrService.getAllConnections(
-					req.app.get('db'),
-					currentUserId
-				)
-
-				let connectionIds = connections.map(x => x.connection_id)
-
-				let users = await Promise.all( connectionIds.map( x => { 
-					return centrService.getUserById(
-						req.app.get('db'),
-						x)
-					}
-				))
-
-				users = users.flat()
-
-				return res.status(200).json(users)
-			} catch(error) {
-				console.error(error)
-			}
-		}
-
-		getConnections()
-	})
-	.delete(jsonParser, (req, res, next) => {
-		let token = req.get("Authorization")
-		token = token.slice(7, token.length);
-		let payload = authService.verifyJwt(token)
-		let currentUsername = payload.user_name
-		let { userId } = req.body
-
-		let asyncFunction = async () => {
-			try {
-				let currentUserId = await centrService.getUserIdByUsername(req.app.get('db'), currentUsername)
-				currentUserId = currentUserId[0]['id']
-
-				let connectionToDelete = await centrService.getConnection(req.app.get('db'), currentUserId, userId)
-				
-				if (connectionToDelete.length !== 0) {
-					connectionToDeleteId = connectionToDelete[0]['id']
-
-					await centrService.deleteConnection(
-						req.app.get('db'),
-						connectionToDeleteId
-					)
-				
-					return res.status(200).json(connectionToDeleteId)
-				} else {
-					res.status(200).json('No connection to delete')
-				}
-				
-			} catch(err) {
-				console.log(err)
-			}
-		}
-
-		asyncFunction()
-
-	})
+    centrService
+      .getUserIdByUsername(req.app.get("db"), username)
+      .then((user) => {
+        return user[0]["id"];
+      })
+      .then((userId) => {
+        return centrService.getAllConnections_UserIds(
+          req.app.get("db"),
+          userId
+        );
+      })
+      .then((connections) => {
+        return Promise.all(
+          connections.map((user) => {
+            return centrService.getUserById(req.app.get("db"), user);
+          })
+        );
+      })
+      .then((result) => {
+        return res.status(200).json(result);
+      })
+      .catch(next);
+  });
 
 authRouter
-	.route('/followers')
-	.all(requireAuth)
-	.get((req, res, next) => {
-			let token = req.get("Authorization")
-			token = token.slice(7, token.length);
-			let payload = authService.verifyJwt(token)
-			let currentUsername = payload.user_name
+  .route("/connections")
+  .all(requireAuth)
+  .get((req, res, next) => {
+    let token = req.get("Authorization");
+    token = token.slice(7, token.length);
 
-			let getFollowers = async () => {
-				try {
-					let userId = await centrService.getUserIdByUsername(req.app.get('db'),currentUsername)
-					userId = userId[0]['id']
-					let followers = await centrService.getFollowers(req.app.get('db'),userId)
-					return res.status(200).json(followers)
-				} catch(error) {
-					console.error(error)
-				}
-			}
+    let payload = authService.verifyJwt(token);
+    let username = payload.user_name;
 
-			getFollowers()
+    let getConnections = async () => {
+      try {
+        let currentUserId = await centrService.getUserIdByUsername(
+          req.app.get("db"),
+          username
+        );
 
-	})
-	.delete(jsonParser, (req, res, next) => {
-		let token = req.get("Authorization")
-		token = token.slice(7, token.length);
-		let payload = authService.verifyJwt(token)
-		let currentUsername = payload.user_name
-		let { userId } = req.body
+        currentUserId = currentUserId[0]["id"];
+        let connections = await centrService.getAllConnections(
+          req.app.get("db"),
+          currentUserId
+        );
 
-		let asyncFunction = async () => {
-			try {
-				let currentUserId = await centrService.getUserIdByUsername(req.app.get('db'), currentUsername)
-				currentUserId = currentUserId[0]['id']
+        let connectionIds = connections.map((x) => x.connection_id);
 
-				let follower = await centrService.getConnection(
-					req.app.get('db'),
-					userId,
-					currentUserId
-				)
+        let users = await Promise.all(
+          connectionIds.map((x) => {
+            return centrService.getUserById(req.app.get("db"), x);
+          })
+        );
 
-				if (follower.length !== 0) {
-					followerToDelete = follower[0]['id']
-					
-					await centrService.deleteConnection(
-						req.app.get('db'),
-						followerToDelete
-					)
+        users = users.flat();
 
-					return res.status(200).json('Follower deleted')
-				} else {
-					return res.status(200).json('No follower to delete')
-				}			
-			} catch(err) {
-				console.log(err)
-			}
-		}
+        return res.status(200).json(users);
+      } catch (error) {
+        console.error(error);
+      }
+    };
 
-		asyncFunction()
-	})
+    getConnections();
+  })
+  .delete(jsonParser, (req, res, next) => {
+    let token = req.get("Authorization");
+    token = token.slice(7, token.length);
+    let payload = authService.verifyJwt(token);
+    let currentUsername = payload.user_name;
+    let { userId } = req.body;
 
-authRouter
-	.route('/notfollowing')
-	.all(requireAuth)
-	.get((req, res, next) => {
-		let token = req.get("Authorization")
-		token = token.slice(7, token.length);
-		let payload = authService.verifyJwt(token)
-		let currentUsername = payload.user_name
+    let asyncFunction = async () => {
+      try {
+        let currentUserId = await centrService.getUserIdByUsername(
+          req.app.get("db"),
+          currentUsername
+        );
+        currentUserId = currentUserId[0]["id"];
 
-		let async = async () => {
-			try {
-				let currentUserId = await centrService.getUserIdByUsername(req.app.get('db'), currentUsername)
-				currentUserId = currentUserId[0]['id']
-			
-				let allUsers = await centrService.getAllUsers(
-					req.app.get('db')
-				)
+        let connectionToDelete = await centrService.getConnection(
+          req.app.get("db"),
+          currentUserId,
+          userId
+        );
 
-		
-				let myConnectons = await centrService.getAllConnections(
-					req.app.get('db'),
-					currentUserId
-				)
+        if (connectionToDelete.length !== 0) {
+          connectionToDeleteId = connectionToDelete[0]["id"];
 
-				let mySentRequests = await centrService.getSentRequests_UserIds(
-					req.app.get('db'),
-					currentUserId
-				)
-				mySentRequestsIds = mySentRequests.map(x => x.connection_id)
+          await centrService.deleteConnection(
+            req.app.get("db"),
+            connectionToDeleteId
+          );
 
-				allUsersIds = allUsers.map(x => x.id)
-				myConnectonsIds = myConnectons.map(x => x.connection_id)
+          return res.status(200).json(connectionToDeleteId);
+        } else {
+          res.status(200).json("No connection to delete");
+        }
+      } catch (err) {
+        console.log(err);
+      }
+    };
 
-				let notFollowingIds = allUsersIds.filter(x => !myConnectonsIds.includes(x));
-				let notFollowingButRequested = notFollowingIds.filter(x =>!mySentRequestsIds.includes(x) )
-				notFollowingButRequested = notFollowingButRequested.filter(x => (
-					x !==  currentUserId))
-				let notFollowing = 
-					await Promise.all(notFollowingButRequested.map(x => {
-						return centrService.getUserById(
-							req.app.get('db'),
-							x
-						)
-				}))
-
-				notFollowing = notFollowing.flat()
-	
-				res.status(200).json(notFollowing)
-			
-			} catch(error) {
-				console.error(error)
-			}
-		}
-
-		async()
-		
-	})
-
+    asyncFunction();
+  });
 
 authRouter
-	.route('/followrequests')
-	.all(requireAuth)
-	.get((req, res, next) => {
-		let token = req.get("Authorization")
-		token = token.slice(7, token.length);
-		let payload = authService.verifyJwt(token)
-		let currentUser = payload.user_name
+  .route("/followers")
+  .all(requireAuth)
+  .get((req, res, next) => {
+    let token = req.get("Authorization");
+    token = token.slice(7, token.length);
+    let payload = authService.verifyJwt(token);
+    let currentUsername = payload.user_name;
 
-		let asyncFunction = async () => {
-			try {
-				let currentUserId = await centrService.getUserIdByUsername(
-					req.app.get('db'),
-					currentUser
-				)
-				currentUserId = currentUserId[0]['id']
+    let getFollowers = async () => {
+      try {
+        let userId = await centrService.getUserIdByUsername(
+          req.app.get("db"),
+          currentUsername
+        );
+        userId = userId[0]["id"];
+        let followers = await centrService.getFollowers(
+          req.app.get("db"),
+          userId
+        );
+        return res.status(200).json(followers);
+      } catch (error) {
+        console.error(error);
+      }
+    };
 
-				let requests = await centrService.getAllRequestsToFollow_UserIds(
-					req.app.get('db'),
-					currentUserId
-				)
+    getFollowers();
+  })
+  .delete(jsonParser, (req, res, next) => {
+    let token = req.get("Authorization");
+    token = token.slice(7, token.length);
+    let payload = authService.verifyJwt(token);
+    let currentUsername = payload.user_name;
+    let { userId } = req.body;
 
-				return res.status(200).json(requests)
-			} catch(err) {
-				console.error(err)
-			}
-		}
+    let asyncFunction = async () => {
+      try {
+        let currentUserId = await centrService.getUserIdByUsername(
+          req.app.get("db"),
+          currentUsername
+        );
+        currentUserId = currentUserId[0]["id"];
 
-		asyncFunction()
-	})
+        let follower = await centrService.getConnection(
+          req.app.get("db"),
+          userId,
+          currentUserId
+        );
 
-	.post(jsonParser, (req, res, next) => {
-		let token = req.get("Authorization")
-		token = token.slice(7, token.length);
-		let payload = authService.verifyJwt(token)
-		let currentUser = payload.user_name
+        if (follower.length !== 0) {
+          followerToDelete = follower[0]["id"];
 
-		let {userId}  = req.body
+          await centrService.deleteConnection(
+            req.app.get("db"),
+            followerToDelete
+          );
 
-		let asyncFunction = async () => {
+          return res.status(200).json("Follower deleted");
+        } else {
+          return res.status(200).json("No follower to delete");
+        }
+      } catch (err) {
+        console.log(err);
+      }
+    };
 
-			try {
-				let currentUserId = await centrService.getUserIdByUsername(
-					req.app.get('db'),
-					currentUser
-				)
-				currentUserId = currentUserId[0]['id']
-
-				let request = await centrService.getRequestToFollow(
-					req.app.get('db'),
-					currentUserId,
-					userId
-				)
-
-				if (request.length !== 0) {
-					request = request[0]['id']
-
-					await centrService.approveRequestToFollow(
-						req.app.get('db'),
-						request
-					)
-
-					res.status(200).json('Request approved')
-				} else {
-					res.status(200).json('Request to approve not found')
-				}
-				
-			} catch(error) {
-				console.error(error)
-			}
-		}
-
-		asyncFunction()
-	})
-	.delete(jsonParser, (req, res, next) => {
-		let token = req.get("Authorization")
-		token = token.slice(7, token.length);
-		let payload = authService.verifyJwt(token)
-		let currentUser = payload.user_name
-
-		let { userId } = req.body
-
-		let asyncFunction = async () => {
-			try {
-				let currentUserId = await centrService.getUserIdByUsername(
-					req.app.get('db'),
-					currentUser
-				)
-				currentUserId = currentUserId[0]['id']
-
-				let requestToDelete = await centrService.getRequestToFollow(
-					req.app.get('db'),
-					currentUserId,
-					userId
-				)
-				
-				if (requestToDelete.length !== 0) {
-					requestToDelete = requestToDelete[0]['id']
-
-					await centrService.deleteConnection(
-						req.app.get('db'),
-						requestToDelete
-					)
-	
-					res.status(200).json('Request deleted')
-				} else {
-					res.status(200).json('No request found')
-				}
-					
-			} catch(err) {
-				console.log(err)
-			}
-		}
-
-		asyncFunction()
-	})
-	
+    asyncFunction();
+  });
 
 authRouter
-	.route('/sentrequests')
-	.all(requireAuth)
-	.get((req, res, next) => {
-		let token = req.get("Authorization")
-		token = token.slice(7, token.length);
-		let payload = authService.verifyJwt(token)
-		let currentUser = payload.user_name
+  .route("/notfollowing")
+  .all(requireAuth)
+  .get((req, res, next) => {
+    let token = req.get("Authorization");
+    token = token.slice(7, token.length);
+    let payload = authService.verifyJwt(token);
+    let currentUsername = payload.user_name;
 
-		let asyncFunction = async () => {
-			try {
-				let currentUserId = await centrService.getUserIdByUsername(
-					req.app.get('db'),
-					currentUser
-				)
-				currentUserId = currentUserId[0]['id']
+    let async = async () => {
+      try {
+        let currentUserId = await centrService.getUserIdByUsername(
+          req.app.get("db"),
+          currentUsername
+        );
+        currentUserId = currentUserId[0]["id"];
 
-				let requests = await centrService.getSentRequests_UserIds(
-					req.app.get('db'),
-					currentUserId
-				)
+        let allUsers = await centrService.getAllUsers(req.app.get("db"));
 
-				return res.status(200).json(requests)
-			} catch(err) {
-				console.error(err)
-			}
-		}
+        let myConnectons = await centrService.getAllConnections(
+          req.app.get("db"),
+          currentUserId
+        );
 
-		asyncFunction()
-	})
+        let mySentRequests = await centrService.getSentRequests_UserIds(
+          req.app.get("db"),
+          currentUserId
+        );
+        mySentRequestsIds = mySentRequests.map((x) => x.connection_id);
 
-	.post(jsonParser, (req, res, next) => {
+        allUsersIds = allUsers.map((x) => x.id);
+        myConnectonsIds = myConnectons.map((x) => x.connection_id);
 
-		let token = req.get("Authorization")
-		token = token.slice(7, token.length);
-		let payload = authService.verifyJwt(token)
-		let currentUser = payload.user_name
+        let notFollowingIds = allUsersIds.filter(
+          (x) => !myConnectonsIds.includes(x)
+        );
+        let notFollowingButRequested = notFollowingIds.filter(
+          (x) => !mySentRequestsIds.includes(x)
+        );
+        notFollowingButRequested = notFollowingButRequested.filter(
+          (x) => x !== currentUserId
+        );
+        let notFollowing = await Promise.all(
+          notFollowingButRequested.map((x) => {
+            return centrService.getUserById(req.app.get("db"), x);
+          })
+        );
 
+        notFollowing = notFollowing.flat();
 
-		let {userId}  = req.body
+        res.status(200).json(notFollowing);
+      } catch (error) {
+        console.error(error);
+      }
+    };
 
-		let asyncFunction = async () => {
-
-			try {
-					let currentUserId = await centrService.getUserIdByUsername(
-						req.app.get('db'),
-						currentUser
-					)
-					currentUserId = currentUserId[0]['id']
-
-					let user_name = await centrService.getUserNameById(
-						req.app.get('db'),
-						userId
-					)
-
-					user_name = user_name[0]['user_name']
-
-
-					let doesRequestExists = await centrService.getSentRequest(
-						req.app.get('db'),
-						currentUserId,
-						userId
-					)
-
-					if (doesRequestExists.length == 0) {
-						await centrService.insertRequestToFollow(
-							req.app.get('db'),
-							currentUserId,
-							userId,
-							user_name
-						)
-
-						res.status(200).json('request added')
-					} else {
-						res.status(200).json('request already exist')
-					}
-			} catch(error) {
-				console.error(error)
-			}
-		}
-
-		asyncFunction()
-	})
-	.delete(jsonParser, (req, res, next) => {
-
-		let token = req.get("Authorization")
-		token = token.slice(7, token.length);
-		let payload = authService.verifyJwt(token)
-		let currentUser = payload.user_name
-
-		let { userId } = req.body
-
-		let asyncFunction = async () => {
-			try {
-				let currentUserId = await centrService.getUserIdByUsername(
-					req.app.get('db'),
-					currentUser
-				)
-				currentUserId = currentUserId[0]['id']
-
-				let requestToDelete = await centrService.getSentRequest(
-					req.app.get('db'),
-					currentUserId,
-					userId
-				)
-				
-				if (requestToDelete.length !== 0) {
-					requestToDelete = requestToDelete[0]['id']
-
-					await centrService.deleteConnection(
-						req.app.get('db'),
-						requestToDelete
-					)
-	
-					res.status(200).json('Request deleted')
-				} else {
-					res.status(200).json('No request found')
-				}
-					
-			} catch(err) {
-				console.log(err)
-			}
-		}
-
-		asyncFunction()
-	})
+    async();
+  });
 
 authRouter
-	.route('/updateavatar')
-	.all(requireAuth)
-	.post(jsonParser, (req, res, next) => {
-		const {url} = req.body
-		console.log(url)
+  .route("/followrequests")
+  .all(requireAuth)
+  .get((req, res, next) => {
+    let token = req.get("Authorization");
+    token = token.slice(7, token.length);
+    let payload = authService.verifyJwt(token);
+    let currentUser = payload.user_name;
 
-		let token = req.get("Authorization")
-		token = token.slice(7, token.length);
-		let payload = authService.verifyJwt(token)
-		let currentUser = payload.user_name
+    let asyncFunction = async () => {
+      try {
+        let currentUserId = await centrService.getUserIdByUsername(
+          req.app.get("db"),
+          currentUser
+        );
+        currentUserId = currentUserId[0]["id"];
 
-		let asyncFunction  = async () => {
-			try {
-				let userID = await centrService.getUserIdByUsername(
-					req.app.get('db'),
-					currentUser
-				)
+        let requests = await centrService.getAllRequestsToFollow_UserIds(
+          req.app.get("db"),
+          currentUserId
+        );
 
-				userID = userID[0]['id']
+        return res.status(200).json(requests);
+      } catch (err) {
+        console.error(err);
+      }
+    };
 
-				await centrService.updateAvatar(
-					req.app.get('db'),
-					userID,
-					url
-				)
-				.then(result => {
-					res.status(200).json('Avatar updated')
-				})
-				.catch()
+    asyncFunction();
+  })
 
-				await centrService.updateAvatarOnPostsTable(
-					req.app.get('db'),
-					userID,
-					url
-				)
-				.then(result => {
-					res.status(200).json('Avatar on posts table updated')
-				})
-				.catch()
-				
-			} catch(error) {
-				console.log(error)
-			}
-		}
+  .post(jsonParser, (req, res, next) => {
+    let token = req.get("Authorization");
+    token = token.slice(7, token.length);
+    let payload = authService.verifyJwt(token);
+    let currentUser = payload.user_name;
 
-		asyncFunction()
-	})
+    let { userId } = req.body;
 
+    let asyncFunction = async () => {
+      try {
+        let currentUserId = await centrService.getUserIdByUsername(
+          req.app.get("db"),
+          currentUser
+        );
+        currentUserId = currentUserId[0]["id"];
 
+        let request = await centrService.getRequestToFollow(
+          req.app.get("db"),
+          currentUserId,
+          userId
+        );
 
+        if (request.length !== 0) {
+          request = request[0]["id"];
 
-module.exports = authRouter
+          await centrService.approveRequestToFollow(req.app.get("db"), request);
+
+          res.status(200).json("Request approved");
+        } else {
+          res.status(200).json("Request to approve not found");
+        }
+      } catch (error) {
+        console.error(error);
+      }
+    };
+
+    asyncFunction();
+  })
+  .delete(jsonParser, (req, res, next) => {
+    let token = req.get("Authorization");
+    token = token.slice(7, token.length);
+    let payload = authService.verifyJwt(token);
+    let currentUser = payload.user_name;
+
+    let { userId } = req.body;
+
+    let asyncFunction = async () => {
+      try {
+        let currentUserId = await centrService.getUserIdByUsername(
+          req.app.get("db"),
+          currentUser
+        );
+        currentUserId = currentUserId[0]["id"];
+
+        let requestToDelete = await centrService.getRequestToFollow(
+          req.app.get("db"),
+          currentUserId,
+          userId
+        );
+
+        if (requestToDelete.length !== 0) {
+          requestToDelete = requestToDelete[0]["id"];
+
+          await centrService.deleteConnection(
+            req.app.get("db"),
+            requestToDelete
+          );
+
+          res.status(200).json("Request deleted");
+        } else {
+          res.status(200).json("No request found");
+        }
+      } catch (err) {
+        console.log(err);
+      }
+    };
+
+    asyncFunction();
+  });
+
+authRouter
+  .route("/sentrequests")
+  .all(requireAuth)
+  .get((req, res, next) => {
+    let token = req.get("Authorization");
+    token = token.slice(7, token.length);
+    let payload = authService.verifyJwt(token);
+    let currentUser = payload.user_name;
+
+    let asyncFunction = async () => {
+      try {
+        let currentUserId = await centrService.getUserIdByUsername(
+          req.app.get("db"),
+          currentUser
+        );
+        currentUserId = currentUserId[0]["id"];
+
+        let requests = await centrService.getSentRequests_UserIds(
+          req.app.get("db"),
+          currentUserId
+        );
+
+        return res.status(200).json(requests);
+      } catch (err) {
+        console.error(err);
+      }
+    };
+
+    asyncFunction();
+  })
+
+  .post(jsonParser, (req, res, next) => {
+    let token = req.get("Authorization");
+    token = token.slice(7, token.length);
+    let payload = authService.verifyJwt(token);
+    let currentUser = payload.user_name;
+
+    let { userId } = req.body;
+
+    let asyncFunction = async () => {
+      try {
+        let currentUserId = await centrService.getUserIdByUsername(
+          req.app.get("db"),
+          currentUser
+        );
+        currentUserId = currentUserId[0]["id"];
+
+        let user_name = await centrService.getUserNameById(
+          req.app.get("db"),
+          userId
+        );
+
+        user_name = user_name[0]["user_name"];
+
+        let doesRequestExists = await centrService.getSentRequest(
+          req.app.get("db"),
+          currentUserId,
+          userId
+        );
+
+        if (doesRequestExists.length == 0) {
+          await centrService.insertRequestToFollow(
+            req.app.get("db"),
+            currentUserId,
+            userId,
+            user_name
+          );
+
+          res.status(200).json("request added");
+        } else {
+          res.status(200).json("request already exist");
+        }
+      } catch (error) {
+        console.error(error);
+      }
+    };
+
+    asyncFunction();
+  })
+  .delete(jsonParser, (req, res, next) => {
+    let token = req.get("Authorization");
+    token = token.slice(7, token.length);
+    let payload = authService.verifyJwt(token);
+    let currentUser = payload.user_name;
+
+    let { userId } = req.body;
+
+    let asyncFunction = async () => {
+      try {
+        let currentUserId = await centrService.getUserIdByUsername(
+          req.app.get("db"),
+          currentUser
+        );
+        currentUserId = currentUserId[0]["id"];
+
+        let requestToDelete = await centrService.getSentRequest(
+          req.app.get("db"),
+          currentUserId,
+          userId
+        );
+
+        if (requestToDelete.length !== 0) {
+          requestToDelete = requestToDelete[0]["id"];
+
+          await centrService.deleteConnection(
+            req.app.get("db"),
+            requestToDelete
+          );
+
+          res.status(200).json("Request deleted");
+        } else {
+          res.status(200).json("No request found");
+        }
+      } catch (err) {
+        console.log(err);
+      }
+    };
+
+    asyncFunction();
+  });
+
+authRouter
+  .route("/updateavatar")
+  .all(requireAuth)
+  .post(jsonParser, (req, res, next) => {
+    const { url } = req.body;
+
+    let token = req.get("Authorization");
+    token = token.slice(7, token.length);
+    let payload = authService.verifyJwt(token);
+    let currentUser = payload.user_name;
+
+    let asyncFunction = async () => {
+      try {
+        let userID = await centrService.getUserIdByUsername(
+          req.app.get("db"),
+          currentUser
+        );
+
+        userID = userID[0]["id"];
+
+        await centrService
+          .updateAvatar(req.app.get("db"), userID, url)
+          .then((result) => {
+            res.status(200).json("Avatar updated");
+          })
+          .catch();
+
+        await centrService
+          .updateAvatarOnPostsTable(req.app.get("db"), userID, url)
+          .then((result) => {
+            res.status(200).json("Avatar on posts table updated");
+          })
+          .catch();
+      } catch (error) {
+        console.log(error);
+      }
+    };
+
+    asyncFunction();
+  });
+
+module.exports = authRouter;
