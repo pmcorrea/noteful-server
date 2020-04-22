@@ -1,45 +1,45 @@
 {
-	"name": "centr",
-	"version": "1.0.0",
-	"description": "",
-	"main": "index.js",
-	"scripts": {
-		"start": "node src/server_listen.js",
-		"test": "mocha --require test/setup.js",
-		"dev": "nodemon src/server_listen.js",
-		"predeploy": "npm audit && npm run migrate:production",
-		"deploy": "git push heroku master",
-		"migrate": "postgrator --config src/postgrator_config.js",
-		"migrate:test": "env NODE_ENV=test npm run migrate",
-		"migrate:production": "env SSL=true DATABASE_URL=$(heroku config:get DATABASE_URL) npm run migrate"
-	},
-	"keywords": [],
-	"author": "",
-	"license": "ISC",
-	"dependencies": {
-		"bcryptjs": "^2.4.3",
-		"cors": "^2.8.5",
-		"dotenv": "^8.2.0",
-		"express": "^4.17.1",
-		"helmet": "^3.21.2",
-		"jsonwebtoken": "^8.5.1",
-		"knex": "^0.20.7",
-		"morgan": "^1.9.1",
-		"pg": "^7.17.1",
-		"xss": "^1.0.6"
-	},
-	"devDependencies": {
-		"chai": "^4.2.0",
-		"mocha": "^6.2.2",
-		"nodemon": "^2.0.2",
-		"supertest": "^4.0.2",
-		"postgrator-cli": "^3.2.0"
-	},
-	"engines": {
-		"node": "12.6.0"
-	},
-	"globals": {
-		"supertest": true,
-		"expect": true
-	}
+  "name": "centr",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "start": "node src/server_listen.js",
+    "test": "mocha --require test/setup.js",
+    "dev": "nodemon src/server_listen.js",
+    "migrate": "postgrator --config src/postgrator_config.js",
+    "migrate:test": "env NODE_ENV=test npm run migrate",
+    "migrate:production": "env SSL=true DATABASE_URL=$(heroku config:get DATABASE_URL) npm run migrate",
+    "predeploy": "npm audit && npm run migrate:production",
+    "deploy": "git push heroku master"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "bcryptjs": "^2.4.3",
+    "cors": "^2.8.5",
+    "dotenv": "^8.2.0",
+    "express": "^4.17.1",
+    "helmet": "^3.22.0",
+    "jsonwebtoken": "^8.5.1",
+    "knex": "^0.20.15",
+    "morgan": "^1.10.0",
+    "pg": "^7.18.2",
+    "xss": "^1.0.6"
+  },
+  "devDependencies": {
+    "chai": "^4.2.0",
+    "mocha": "^6.2.3",
+    "nodemon": "^2.0.3",
+    "postgrator-cli": "^3.2.0",
+    "supertest": "^4.0.2"
+  },
+  "engines": {
+    "node": "12.6.0"
+  },
+  "globals": {
+    "supertest": true,
+    "expect": true
+  }
 }
