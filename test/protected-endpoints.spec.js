@@ -2,7 +2,7 @@ const knex = require('knex')
 const app = require('../src/app')
 const helpers = require('./test_helpers')
 
-describe('Protected endpoints', function() {
+describe('Protected endpoints', function () {
   let db
 
   const testUsers = helpers.makeTestUsers()
@@ -22,40 +22,35 @@ describe('Protected endpoints', function() {
   afterEach('cleanup', () => helpers.cleanDB(db))
 
   beforeEach('insert users', () =>
-  	helpers.seedUsers(db, testUsers)
+    helpers.seedUsers(db, testUsers)
   )
 
   const protectedEndpoints = [
     {
-		name: 'GET /posts',
-		path: '/posts',
-		method: supertest(app).get,
-	},
-	{
-		name: 'POST /posts',
-		path: '/posts',
-		method: supertest(app).post,
-	},
-    {
-		name: 'DELETE /posts/:postId',
-		path: '/posts/:postId',
-		method: supertest(app).delete,
+      name: 'POST /posts',
+      path: '/posts',
+      method: supertest(app).post,
     },
     {
-		name: 'GET /folders',
-		path: '/folders',
-		method: supertest(app).get,
-	},
-	{
-		name: 'POST /folders',
-		path: '/folders',
-		method: supertest(app).post,
-	},
-	{
-		name: 'DELETE /folders/:folderId',
-		path: '/folders/:folderId',
-		method: supertest(app).delete,
-	},
+      name: 'DELETE /posts/:postId',
+      path: '/posts/:postId',
+      method: supertest(app).delete,
+    },
+    {
+      name: 'GET /folders',
+      path: '/folders',
+      method: supertest(app).get,
+    },
+    {
+      name: 'POST /folders',
+      path: '/folders',
+      method: supertest(app).post,
+    },
+    {
+      name: 'DELETE /folders/:folderId',
+      path: '/folders/:folderId',
+      method: supertest(app).delete,
+    },
   ]
 
   protectedEndpoints.forEach(endpoint => {
@@ -74,7 +69,7 @@ describe('Protected endpoints', function() {
       })
 
       it(`responds 401 'Unauthorized request' when invalid sub in payload`, () => {
-        const invalidUser = { user_handle: 'user-not-existy' }
+        const invalidUser = { user_name: 'user-not-existy' }
         return endpoint.method(endpoint.path)
           .set('Authorization', helpers.makeAuthHeader(invalidUser))
           .expect(401, { error: `Unauthorized request` })

@@ -4,31 +4,38 @@ const jwt = require('jsonwebtoken')
 function makeTestPosts() {
 	return [
 		{
-			post_id: "test_id_1",
-			post_name: "test_post_1",
-			modified: "2019-01-03T00:00:00.000Z",
-			folder_id: "test_folder_id_1",
+			user_id: 1,
+			user_name: "Peter",
+			avatar: "https://res.cloudinary.com/pmcorrea/image/upload/v1583012322/k2o16y7t0nob9dhovfsw.jpg",
+			folder_id: 1,
+			post_name: "Chicken Recipes",
+			modified: "Mon, 1 Apr 2020 23:18:08 GMT",
 			content: "This is some test content.",
+			visibility: "Public",
 		},
+
 		{
-			post_id: "test_id_2",
-			post_name: "test_post_2",
-			modified: "2019-01-03T00:00:00.000Z",
-			folder_id: "test_folder_id_2",
+			user_id: 1,
+			user_name: "Adam",
+			avatar: "https://res.cloudinary.com/pmcorrea/image/upload/v1583012322/k2o16y7t0nob9dhovfsw.jpg",
+			folder_id: 1,
+			post_name: "Chicken Recipes",
+			modified: "Mon, 1 Apr 2020 23:18:08 GMT",
 			content: "This is some test content.",
-		}
+			visibility: "Private",
+		},
 	]
 }
 
 function makeTestFolder() {
 	[
 		{
-			folder_id: "test_folder_id_1",
-			folder_name: "test_folder_name_1"
+			user_id: "2",
+			folder_name: "Important"
 		},
 		{
-			folder_id: "test_folder_id_2",
-			folder_name: "test_folder_name_2"
+			user_id: "3",
+			folder_name: "Important"
 		},
 	]
 }
@@ -36,57 +43,53 @@ function makeTestFolder() {
 function makeTestUsers() {
 	return [
 		{
-			user_handle: "test_user_1",
-			user_password: "test_password_1",
-			user_type: "user",
+			user_name: "Peter_test",
+			user_password: "adminpassword",
+			user_status: "admin",
+			visibility: "Public",
+			avatar: "https://res.cloudinary.com/pmcorrea/image/upload/v1583012322/k2o16y7t0nob9dhovfsw.jpg",
 		},
 		{
-			user_handle: "test_user_2",
-			user_password: "test_password_2",
-			user_type: "user",
+			user_name: "Petra_test",
+			user_password: "userpassword",
+			user_status: "user",
+			visibility: "Public",
+			avatar: "https://res.cloudinary.com/pmcorrea/image/upload/v1583012322/k2o16y7t0nob9dhovfsw.jpg",
 		},
-		{
-			user_handle: "test_admin_1",
-			user_password: "test_password_1",
-			user_type: "admin",
-		},
-		{
-			user_handle: "test_admin_2",
-			user_password: "test_password_2",
-			user_type: "admin",
-		},
+
 	]
 }
 
 function cleanDB(db) {
-	return db.transaction(trx => 
+	return db.transaction(trx =>
 		trx.raw(
 			`TRUNCATE
+			posts, 
 			folders,
-			posts,
-			users
+			users,
+			connections
 			`
 		)
-		.then(() =>
-			Promise.all([
-			trx.raw(`ALTER SEQUENCE folders_id_seq minvalue 0 START WITH 1`),
-			trx.raw(`ALTER SEQUENCE posts_id_seq minvalue 0 START WITH 1`),
-			trx.raw(`ALTER SEQUENCE users_id_seq minvalue 0 START WITH 1`),
-			trx.raw(`SELECT setval('folders_id_seq', 0)`),
-			trx.raw(`SELECT setval('posts_id_seq', 0)`),
-			trx.raw(`SELECT setval('users_id_seq', 0)`),
-			])
-		)
-		.catch(function(error) {
-			console.error(error)
-		})
+			.then(() =>
+				Promise.all([
+					trx.raw(`ALTER SEQUENCE folders_id_seq minvalue 0 START WITH 1`),
+					trx.raw(`ALTER SEQUENCE posts_id_seq minvalue 0 START WITH 1`),
+					trx.raw(`ALTER SEQUENCE users_id_seq minvalue 0 START WITH 1`),
+					trx.raw(`SELECT setval('folders_id_seq', 0)`),
+					trx.raw(`SELECT setval('posts_id_seq', 0)`),
+					trx.raw(`SELECT setval('users_id_seq', 0)`),
+				])
+			)
+			.catch(function (error) {
+				console.error(error)
+			})
 	)
 }
 
 function seedUsers(db, users) {
 	const preppedUsers = users.map(user => ({
-	  ...user,
-	  user_password: bcrypt.hashSync(user.user_password, 1)
+		...user,
+		user_password: bcrypt.hashSync(user.user_password, 4)
 	}))
 
 
@@ -94,15 +97,15 @@ function seedUsers(db, users) {
 }
 
 function makeAuthHeader(user, secret = process.env.JWT_SECRET) {
-	const token = jwt.sign({ user_name: user.user_handle }, secret, {
-	  subject: user.user_handle,
-	  algorithm: 'HS256',
+	const token = jwt.sign({ user_name: user.user_name }, secret, {
+		subject: user.user_name,
+		algorithm: 'HS256',
 	})
 	return `Bearer ${token}`
-  }
+}
 
 module.exports = {
-	makeTestFolder, 
+	makeTestFolder,
 	makeTestPosts,
 	makeTestUsers,
 	cleanDB,

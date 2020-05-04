@@ -37,9 +37,9 @@ centrRouter
 		let userFromPayload = payload.user_name
 
 		let { post } = req.body
-		
+
 		let { post_name, content, folder_id, visibility, modified, postIdToEdit } = post
-		
+
 		centrService.updatePostById(
 			req.app.get('db'),
 			post_name,
@@ -49,16 +49,17 @@ centrRouter
 			modified,
 			postIdToEdit
 		)
-		.then(result => {
-			return res.status(200).json('post updated')
-		})
-		.catch(err => {
-			console.error(err)
-		})
+			.then(result => {
+				return res.status(200).json('post updated')
+			})
+			.catch(err => {
+				console.error(err)
+			})
 	})
 
 centrRouter
 	.route('/posts')
+	.all(requireAuth)
 	.post(jsonParser, (req, res, next) => {
 		let token = req.get("Authorization")
 		token = token.slice(7, token.length);
@@ -67,17 +68,17 @@ centrRouter
 
 		return centrService.getUserIdByUsername(req.app.get('db'), userFromPayload)
 			.then(userId => {
-				
+
 				let user_id = userId[0]['id']
-				
+
 				let { user_name, folder_id, post_name, modified, content, visibility, avatar } = req.body.post
 				user_name = user_name['user_name']
 				let newPost = { user_id, user_name, folder_id, post_name, modified, content: xss(content), visibility, avatar }
-			
+
 				centrService.addPost(req.app.get("db"), newPost)
 					.then(result => {
 						return res.status(200).json(result)
-						})
+					})
 					.catch(next);
 			})
 			.catch(next)
@@ -92,35 +93,35 @@ centrRouter
 		let payload = authService.verifyJwt(token)
 		let currentUser = payload.user_name
 
-		let {userId} = req.body
+		let { userId } = req.body
 
 		let async = async () => {
 			try {
-				let result = 
+				let result =
 					await Promise.all(userId.map(x => {
-						
+
 						return centrService.getPublicPosts(
 							req.app.get('db'),
 							x
 						)
-				}))
+					}))
 
 				function compareDates(a, b) {
 
 					let aDate = new Date(a.modified)
 					let bDate = new Date(b.modified)
-				
+
 					if (aDate > bDate) {
 						return -1
 					}
-				
+
 					if (bDate > aDate) {
 						return 1
 					}
-				
+
 					return 0
 				}
-				
+
 				if (result.length !== 0) {
 					result = result.flat()
 					result.sort(compareDates)
@@ -129,13 +130,13 @@ centrRouter
 					res.status(200).json([])
 				}
 
-			} catch(error) {
+			} catch (error) {
 				console.error(error)
 			}
 		}
 		async()
-		
-		
+
+
 	})
 
 centrRouter
@@ -144,10 +145,10 @@ centrRouter
 	.delete((req, res, next) => {
 		const postId = req.params.postId
 		centrService.deletePost(req.app.get('db'), postId)
-		.then(() => {
-			res.status(200).json(postId)
-		})
-		.catch(next)
+			.then(() => {
+				res.status(200).json(postId)
+			})
+			.catch(next)
 	})
 
 centrRouter
@@ -156,10 +157,10 @@ centrRouter
 	.delete((req, res, next) => {
 		const folderId = req.params.folderId
 		centrService.deleteFolder(req.app.get('db'), folderId)
-		.then(folderId => {
-			return res.status(200).json(folderId)
-		})
-		.catch(next)
+			.then(folderId => {
+				return res.status(200).json(folderId)
+			})
+			.catch(next)
 	})
 
 centrRouter
@@ -170,16 +171,16 @@ centrRouter
 		token = token.slice(7, token.length);
 		let payload = authService.verifyJwt(token)
 		let user = payload.user_name
-		
+
 		centrService.getFolders(
-			
+
 			req.app.get('db'),
 			user
 		)
-		.then(folders => {
-			res.json(folders)
-		})
-		.catch(next)
+			.then(folders => {
+				res.json(folders)
+			})
+			.catch(next)
 	})
 	.post(jsonParser, (req, res, next) => {
 		let token = req.get("Authorization")
@@ -188,20 +189,20 @@ centrRouter
 		let userFromPayload = payload.user_name
 
 		const { folder_name } = req.body.folder
-		
+
 		return centrService.getUserIdByUsername(req.app.get('db'), userFromPayload)
 			.then(userId => {
-				const newFolder = { 
-					user_id: userId[0]['id'], 
-					folder_name: folder_name 
+				const newFolder = {
+					user_id: userId[0]['id'],
+					folder_name: folder_name
 				}
 				return centrService.addFolder(req.app.get('db'), newFolder)
 					.then(result => {
 						return res.status(200).json(result)
-						})
+					})
 					.catch(next)
-						})
-		.catch(next)	
+			})
+			.catch(next)
 	})
-	
+
 module.exports = centrRouter
